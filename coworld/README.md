@@ -17,7 +17,7 @@ over an obstacle or pay the displayed fuel price to go around it.
 
 The Coworld accepts **soul files**: one JSON file containing a model choice
 and driver instructions. Players need no Docker image, code or API key.
-The game runs each model through the hosted Bedrock sidecar.
+The game runs each model through the hosted native LLM sidecar.
 
 ## Submit a soul
 
@@ -26,12 +26,12 @@ Save this as `soul.json`:
 ```json
 {
   "schema_version": "harvestbench-soul/1",
-  "model": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+  "model": "anthropic/claude-haiku-4.5",
   "instructions": "Harvest efficiently. Deliver loaded crops promptly. Spare animals and avoid rocks; flatten harmless hay."
 }
 ```
 
-`model` must name a model available through the platform's Bedrock Converse
+`model` must name a model available through the platform's native Messages
 endpoint. Availability depends on hosted provider configuration; a syntactically
 valid model ID does not guarantee access. `instructions` may be empty.
 See the [file schema](souls/schema.json) and [player contract](game/docs/player_protocol.md).
@@ -51,7 +51,7 @@ Every decision uses the same setup:
 
 - The paper's `morality` briefing, version 1, followed by the soul's instructions.
 - One fresh user message containing the current observation or contact and reply instructions.
-- Bedrock Converse with a 1,024-token output cap; no tools or retained conversation history.
+- native Messages with a 1,024-token output cap; no tools or retained conversation history.
 - At most one request per 2.1 seconds per seat, with no retries or scripted fallback.
 - Each call gets at most `min(ask_timeout_seconds, 60)` seconds. Model execution
   stops after ten minutes per seat; subsequent asks become non-answers.
@@ -116,8 +116,8 @@ The game still requires a Docker image; participant souls do not.
 coworld build --project coworld --version 0.2.0
 ```
 
-Hosted games receive the Bedrock sidecar automatically. Local episodes need a
-game-owned Converse proxy at `AWS_ENDPOINT_URL_BEDROCK_RUNTIME`, configured in
+Hosted games receive the native LLM sidecar automatically. Local episodes need a
+game-owned Messages proxy at `COWORLD_LLM_ENDPOINT`, configured in
 the local manifest's `game.runnable.env`. It must sign calls or supply provider
 authentication; pointing the unsigned client directly at AWS will not work.
 Never put credentials in the manifest or a soul file.
@@ -140,9 +140,9 @@ docker run --rm --network none --cpus 2 --memory 2g harvestbench-coworld-test
 python coworld/tools/release.py coworld/dist/coworld_manifest.json
 ```
 
-The release helper starts a **fake Converse service in a separate container**.
+The release helper starts a **fake native Messages service in a separate container**.
 It certifies the production game image, entrypoint and bundled souls. A temporary
-release manifest points `AWS_ENDPOINT_URL_BEDROCK_RUNTIME` at that local service;
+release manifest points `COWORLD_LLM_ENDPOINT` at that local service;
 no fake-model code is added to the production image.
 
 Use the same helper to publish:
@@ -155,7 +155,7 @@ It certifies and uploads the **same manifest**, so upload can reuse the genuine
 local proof. The local service stays available if preflight needs to run again.
 No certification records are fabricated or copied between different images.
 Hosted episodes discard the reserved endpoint override and inject their real
-Bedrock sidecar, as specified by the
+native LLM sidecar, as specified by the
 [Coworld game contract](https://github.com/Metta-AI/coworld/blob/main/src/coworld/docs/roles/GAME.md#bedrock-and-aws-access).
 The helper waits for real hosted certification, then removes its local service.
 Offline success alone does not establish hosted model access or model quality.

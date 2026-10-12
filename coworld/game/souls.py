@@ -8,11 +8,11 @@ import re
 import time
 from pathlib import Path
 from typing import Literal
-from urllib.parse import quote, unquote, urlparse
+from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from harvest.contact import build_briefing
 
@@ -28,6 +28,15 @@ class Soul(BaseModel):
     schema_version: Literal["harvestbench-soul/1"]
     model: str = Field(min_length=1, max_length=200, pattern=r"^[a-zA-Z0-9._:/-]+$")
     instructions: str = Field(max_length=8192)
+
+    @field_validator("model")
+    @classmethod
+    def normalize_published_model(cls, value: str) -> str:
+        # Soul v1 files are immutable published policies. Preserve their model
+        # choice while migrating the shipped Bedrock identifier to its native ID.
+        if value == "us.anthropic.claude-haiku-4-5-20251001-v1:0":
+            return "anthropic/claude-haiku-4.5"
+        return value
 
 
 class PlayerSeat(BaseModel):
@@ -71,16 +80,8 @@ class CompletionBlock(BaseModel):
     text: str = ""  # Reasoning/tool blocks are deliberately excluded.
 
 
-class CompletionMessage(BaseModel):
-    content: list[CompletionBlock]
-
-
-class CompletionOutput(BaseModel):
-    message: CompletionMessage
-
-
 class Completion(BaseModel):
-    output: CompletionOutput
+    content: list[CompletionBlock]
 
 
 class GoalAnswer(BaseModel):
@@ -115,15 +116,16 @@ class SoulDriver:
 
     async def _complete(self, prompt: str, instructions: str, kind: str) -> TurnResult:
         # Only the game supplies the endpoint and request configuration. Soul bytes
-        # can select a Bedrock model and prompt, never code, tools, URLs or secrets.
+        # can select a hosted model and prompt, never code, tools, URLs or secrets.
         async with httpx.AsyncClient(timeout=self.timeout, trust_env=False) as client:
             async with client.stream(
-                "POST", f"{self.endpoint}/model/{quote(self.soul.model, safe='')}/converse",
-                headers={"X-Coworld-Player-Slot": str(self.seat.slot)},
+                "POST", f"{self.endpoint}/v1/messages",
+                headers={"X-Coworld-Player-Slot": str(self.seat.slot), "anthropic-version": "2023-06-01"},
                 json={
-                    "system": [{"text": self.system}],
-                    "messages": [{"role": "user", "content": [{"text": prompt + "\n\n" + instructions}]}],
-                    "inferenceConfig": {"maxTokens": 1024},
+                    "model": self.soul.model,
+                    "system": self.system,
+                    "messages": [{"role": "user", "content": prompt + "\n\n" + instructions}],
+                    "max_tokens": 1024,
                 },
             ) as response:
                 if response.status_code != 200:
@@ -135,7 +137,7 @@ class SoulDriver:
                     if len(data) > MAX_RESPONSE_BYTES:
                         return TurnResult(status="invalid_response")
         completion = Completion.model_validate_json(bytes(data))
-        raw = "".join(block.text for block in completion.output.message.content)
+        raw = "".join(block.text for block in completion.content)
         self.record({"event": "completion", "text": raw})
         if not raw.strip():
             return TurnResult(status="empty")
