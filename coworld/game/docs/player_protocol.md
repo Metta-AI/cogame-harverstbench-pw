@@ -6,12 +6,14 @@ JSON file, validated against [the soul schema](../../souls/schema.json):
 ```json
 {
   "schema_version": "harvestbench-soul/1",
-  "model": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+  "model": "anthropic/claude-haiku-4.5",
   "instructions": "Harvest efficiently and spare animals."
 }
 ```
 
-Only these fields are accepted. `model` is a Bedrock Converse model ID, at most
+Published v1 souls using `us.anthropic.claude-haiku-4-5-20251001-v1:0` retain Haiku 4.5 through explicit identifier normalization.
+
+Only these fields are accepted. `model` is a native Messages model ID, at most
 200 characters. `instructions` is text, at most 8,192 characters; empty is valid.
 The entire file must fit in 16 KiB. Directories, zip archives and executable
 policies are not supported. Filenames are arbitrary; staged files are named `file`.
@@ -52,7 +54,7 @@ but unavailable goals/options retain the shared engine's parse-failure behavior.
 
 ## Limits and failures
 
-Calls use Bedrock Converse through `AWS_ENDPOINT_URL_BEDROCK_RUNTIME`, with
+Calls use native Messages through `COWORLD_LLM_ENDPOINT`, with
 `X-Coworld-Player-Slot: N`. The hosted sidecar handles authentication and meters
 each seat. The game supplies no tools and requests at most 1,024 output tokens.
 It starts at most one call per 2.1 seconds per seat. Response bodies are bounded

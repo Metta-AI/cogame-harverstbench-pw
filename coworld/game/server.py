@@ -365,7 +365,7 @@ async def _play_game() -> None:
         if isinstance(soul, BaseException):
             raise soul
         state.drivers[seat.slot] = SoulDriver(
-            seat, soul, os.environ["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"], float(CONFIG["ask_timeout_seconds"]),
+            seat, soul, os.environ["COWORLD_LLM_ENDPOINT"], float(CONFIG["ask_timeout_seconds"]),
         )
     state.started = True
     logger.info("starting episode: seed=%s k=%s players=%s", CONFIG["seed"], CONFIG["detour_cost"], PLAYER_NAMES)

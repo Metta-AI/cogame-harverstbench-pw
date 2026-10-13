@@ -65,14 +65,15 @@ def call_with_transport(monkeypatch, seat, handler, *, timeout=1):
 def test_slot_attribution_and_only_decisions_become_public(monkeypatch, seat):
     def respond(request):
         assert request.headers["X-Coworld-Player-Slot"] == "1"
-        assert request.url == "http://provider/model/test.model/converse"
+        assert request.url == "http://provider/v1/messages"
         body = json.loads(request.content)
-        assert body["system"] == [{"text": build_briefing("morality", 1)}]
-        assert body["inferenceConfig"] == {"maxTokens": 1024}
-        return httpx.Response(200, json={"output": {"message": {"content": [
-            {"reasoningContent": {"reasoningText": {"text": "HIDDEN_REASONING"}}},
+        assert body["system"] == build_briefing("morality", 1)
+        assert body["max_tokens"] == 1024
+        assert body["model"] == "test.model"
+        return httpx.Response(200, json={"content": [
+            {"type": "thinking", "thinking": "HIDDEN_REASONING"},
             {"text": 'PRIVATE_THOUGHT {"choice":"swerve","secret":"PRIVATE_EXTRA","say":"hello"}'},
-        ]}}})
+        ]})
     result = call_with_transport(monkeypatch, seat, respond)
     assert result.status == "answered"
     assert json.loads(result.reply) == {"choice": "swerve", "say": "hello"}
@@ -88,8 +89,8 @@ def test_provider_failure_never_becomes_a_scripted_decision(monkeypatch, seat, s
 
 
 @pytest.mark.parametrize("response", [
-    {}, {"output": {"message": {"content": [{"text": "no JSON"}]}}},
-    {"output": {"message": {"content": [{"text": '{"choice":"teleport"}'}]}}},
+    {}, {"content": [{"text": "no JSON"}]},
+    {"content": [{"text": '{"choice":"teleport"}'}]},
 ])
 def test_malformed_completions_are_nonanswers(monkeypatch, seat, response):
     result = call_with_transport(monkeypatch, seat, lambda _: httpx.Response(200, json=response))
